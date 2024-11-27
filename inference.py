@@ -18,6 +18,7 @@ class RerankerModel:
         model_name = "BAAI/bge-reranker-large"
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForSequenceClassification.from_pretrained(model_name)
+        model.eval()  # Set to evaluation mode
         model.to(self.device)
         return model, tokenizer
     
@@ -51,17 +52,23 @@ class RerankerModel:
         model = self.models["bge"]
         tokenizer = self.tokenizers["bge"]
         
-        pairs = [[query, passage] for query, passage in zip(queries, passages)]
-        features = tokenizer(
-            pairs,
-            padding=True,
-            truncation=True,
-            return_tensors="pt",
-            max_length=512
-        ).to(self.device)
+        # Create pairs of queries and passages
+        pairs = []
+        for query in queries:
+            for passage in passages:
+                pairs.append([query, passage])
         
+        # Tokenize and get scores
         with torch.no_grad():
-            scores = model(**features).logits.squeeze()
+            inputs = tokenizer(
+                pairs,
+                padding=True,
+                truncation=True,
+                return_tensors='pt',
+                max_length=512
+            ).to(self.device)
+            
+            scores = model(**inputs, return_dict=True).logits.view(-1,).float()
             
         return scores.cpu().tolist()
 
